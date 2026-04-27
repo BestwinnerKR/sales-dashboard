@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>메가인포 영업 포털 — 내 현황</title>
+<title>베스트위너 영업 포털 — 내 현황</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="top-bar">
-  <div class="brand">메가인포 영업 포털</div>
+  <div class="brand">베스트위너 영업 포털</div>
   <div class="user-info">
     <span id="user-name"></span>
     <button class="btn-logout" onclick="logout()">로그아웃</button>
@@ -17,7 +17,10 @@
 </div>
 
 <div class="main">
-  <div class="page-title">내 영업 현황</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <div class="page-title" style="margin-bottom:0;">내 영업 현황</div>
+    <button onclick="refreshAll()" id="refresh-btn" style="font-size:13px;font-weight:600;padding:7px 14px;background:var(--white);border:1.5px solid var(--border);border-radius:7px;font-family:inherit;cursor:pointer;color:var(--text-muted);">↻ 새로고침</button>
+  </div>
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('seobwi')">섭외 현황</button>
@@ -257,6 +260,19 @@ function goDetail(id, type) {
 
 function goContractForm(seobwiId, company) {
   location.href = `contract-form.html?seobwi_id=${seobwiId}&company=${company}`;
+}
+
+async function refreshAll() {
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = '↻ 불러오는 중...';
+  btn.disabled = true;
+  contractPages = [];
+  document.getElementById('seobwi-body').innerHTML = '<tr class="loading-row"><td colspan="5">데이터를 불러오는 중...</td></tr>';
+  document.getElementById('contract-body').innerHTML = '<tr class="loading-row"><td colspan="5">데이터를 불러오는 중...</td></tr>';
+  document.getElementById('contract-status-filter').innerHTML = '<option value="">전체 상태</option>';
+  await Promise.all([loadSeobwi(), loadContract()]);
+  btn.textContent = '↻ 새로고침';
+  btn.disabled = false;
 }
 
 loadSeobwi();
