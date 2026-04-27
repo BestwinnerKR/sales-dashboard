@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>메가인포 영업 포털 — 내 현황</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="brand">메가인포 영업 포털</div>
+  <div class="user-info">
+    <span id="user-name"></span>
+    <button class="btn-logout" onclick="logout()">로그아웃</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="page-title">내 영업 현황</div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('seobwi')">섭외 현황</button>
+    <button class="tab" onclick="switchTab('contract')">계약관리 현황</button>
+  </div>
+
+  <!-- 섭외 탭 -->
+  <div id="tab-seobwi">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">섭외 목록</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <a href="https://important-raft-38b.notion.site/34fcddcfdce28029913bd4f7e4ac304a?pvs=105" target="_blank" style="font-size:13px;font-weight:600;padding:6px 14px;background:var(--primary);color:white;border-radius:7px;text-decoration:none;">+ 섭외 등록</a>
+          <div class="count-badge" id="seobwi-count">불러오는 중...</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>업체명</th>
+              <th>상태</th>
+              <th>TM일</th>
+              <th>상담날짜</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="seobwi-body">
+            <tr class="loading-row"><td colspan="5">데이터를 불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 계약관리 탭 -->
+  <div id="tab-contract" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">계약관리 목록</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <input id="contract-search" type="text" placeholder="업체명 검색" oninput="renderContract()" style="font-size:13px;padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:inherit;outline:none;width:140px;">
+          <select id="contract-status-filter" onchange="renderContract()" style="font-size:13px;padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:inherit;outline:none;cursor:pointer;">
+            <option value="">전체 상태</option>
+          </select>
+          <div class="count-badge" id="contract-count">불러오는 중...</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>업체명</th>
+              <th>상태</th>
+              <th>상담날짜</th>
+              <th>고용신청인원</th>
+              <th>부서</th>
+            </tr>
+          </thead>
+          <tbody id="contract-body">
+            <tr class="loading-row"><td colspan="5">데이터를 불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const EDGE_URL = 'https://cacapnccxogkwatpvvte.supabase.co/functions/v1/notion-proxy';
+
+const staff = JSON.parse(sessionStorage.getItem('staff') || 'null');
+if (!staff) location.href = 'index.html';
+
+document.getElementById('user-name').textContent = `${staff.name} (${staff.department || ''})`;
+
+function logout() {
+  sessionStorage.removeItem('staff');
+  location.href = 'index.html';
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-seobwi').style.display = tab === 'seobwi' ? '' : 'none';
+  document.getElementById('tab-contract').style.display = tab === 'contract' ? '' : 'none';
+}
+
+// 상태별 뱃지 색상
+function statusBadge(status) {
+  const map = {
+    '신규': 'badge-blue',
+    '상담 완료': 'badge-green',
+    '계약 완료': 'badge-purple',
+    '이력서 전송 완료': 'badge-yellow',
+    '채용 완료': 'badge-gray',
+    '사증 제출 완료': 'badge-orange',
+    '사증 발급 완료': 'badge-pink',
+    '섭외 취소': 'badge-red',
+    '영업 취소': 'badge-red',
+    '보류': 'badge-gray',
+    '사증 불허': 'badge-red',
+    '진행 중': 'badge-blue',
+    '완료': 'badge-green',
+  };
+  const cls = map[status] || 'badge-gray';
+  return `<span class="badge ${cls}">${status || '-'}</span>`;
+}
+
+function getProp(page, key, type = 'text') {
+  const prop = page.properties?.[key];
+  if (!prop) return '-';
+  if (type === 'title') return prop.title?.[0]?.plain_text || '-';
+  if (type === 'select') return prop.select?.name || '-';
+  if (type === 'rich_text') return prop.rich_text?.[0]?.plain_text || '-';
+  if (type === 'date') return prop.date?.start?.slice(0, 10) || '-';
+  if (type === 'number') return prop.number ?? '-';
+  return '-';
+}
+
+function formatDate(str) {
+  if (!str || str === '-') return '-';
+  return str.replace(/-/g, '.');
+}
+
+// 섭외 목록 로드
+async function loadSeobwi() {
+  try {
+    const res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_seobwi_list', staff_code: staff.staff_code, name: staff.name })
+    });
+    const data = await res.json();
+    const pages = data.results || [];
+
+    // 계약 완료 건 숨김
+    const visible = pages.filter(p => getProp(p, '상태', 'select') !== '계약 완료');
+    document.getElementById('seobwi-count').textContent = `총 ${visible.length}건`;
+
+    if (visible.length === 0) {
+      document.getElementById('seobwi-body').innerHTML = '<tr><td colspan="5" class="empty">섭외 데이터가 없습니다.</td></tr>';
+      return;
+    }
+
+    document.getElementById('seobwi-body').innerHTML = visible.map(p => {
+      const company = getProp(p, '업체명', 'title');
+      const status = getProp(p, '상태', 'select');
+      const contractable = status !== '계약 완료' && status !== '섭외 취소' && status !== '영업 취소' && status !== '사증 불허';
+      return `
+        <tr onclick="goDetail('${p.id}', 'seobwi')">
+          <td><strong>${company}</strong></td>
+          <td>${statusBadge(status)}</td>
+          <td>${formatDate(getProp(p, 'TM일', 'date'))}</td>
+          <td>${formatDate(getProp(p, '방문 상담 날짜', 'date'))}</td>
+          <td>
+            ${contractable ? `<button onclick="event.stopPropagation();goContractForm('${p.id}','${encodeURIComponent(company)}')" style="font-size:12px;font-weight:600;padding:5px 12px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;">계약 진행</button>` : ''}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (e) {
+    document.getElementById('seobwi-body').innerHTML = '<tr><td colspan="5" class="empty">데이터 로드 실패</td></tr>';
+    document.getElementById('seobwi-count').textContent = '오류';
+  }
+}
+
+let contractPages = [];
+
+async function loadContract() {
+  try {
+    const res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_contract_list', staff_code: staff.staff_code, name: staff.name })
+    });
+    const data = await res.json();
+    contractPages = data.results || [];
+
+    // 상담날짜 내림차순 정렬
+    contractPages.sort((a, b) => {
+      const da = getProp(a, '상담날짜', 'date');
+      const db = getProp(b, '상담날짜', 'date');
+      if (da === '-' && db === '-') return 0;
+      if (da === '-') return 1;
+      if (db === '-') return -1;
+      return db.localeCompare(da);
+    });
+
+    // 상태 필터 옵션 구성
+    const statuses = [...new Set(contractPages.map(p => getProp(p, '상태', 'select')).filter(s => s !== '-'))];
+    const select = document.getElementById('contract-status-filter');
+    statuses.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      select.appendChild(opt);
+    });
+
+    renderContract();
+  } catch (e) {
+    document.getElementById('contract-body').innerHTML = '<tr><td colspan="5" class="empty">데이터 로드 실패</td></tr>';
+    document.getElementById('contract-count').textContent = '오류';
+  }
+}
+
+function renderContract() {
+  const filter = document.getElementById('contract-status-filter').value;
+  const search = document.getElementById('contract-search').value.trim();
+  const filtered = contractPages.filter(p => {
+    const statusOk = !filter || getProp(p, '상태', 'select') === filter;
+    const searchOk = !search || getProp(p, '업체명', 'title').includes(search);
+    return statusOk && searchOk;
+  });
+
+  document.getElementById('contract-count').textContent = `총 ${filtered.length}건`;
+
+  if (filtered.length === 0) {
+    document.getElementById('contract-body').innerHTML = '<tr><td colspan="5" class="empty">계약관리 데이터가 없습니다.</td></tr>';
+    return;
+  }
+
+  document.getElementById('contract-body').innerHTML = filtered.map(p => `
+    <tr onclick="goDetail('${p.id}', 'contract')">
+      <td><strong>${getProp(p, '업체명', 'title')}</strong></td>
+      <td>${statusBadge(getProp(p, '상태', 'select'))}</td>
+      <td>${formatDate(getProp(p, '상담날짜', 'date'))}</td>
+      <td>${getProp(p, '고용신청인원', 'number')}명</td>
+      <td>${getProp(p, '부서', 'select')}</td>
+    </tr>
+  `).join('');
+}
+
+function goDetail(id, type) {
+  location.href = `detail.html?id=${id}&type=${type}`;
+}
+
+function goContractForm(seobwiId, company) {
+  location.href = `contract-form.html?seobwi_id=${seobwiId}&company=${company}`;
+}
+
+loadSeobwi();
+loadContract();
+</script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>메가인포 영업 포털 — 상세</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="brand">메가인포 영업 포털</div>
+  <div class="user-info">
+    <span id="user-name"></span>
+    <button class="btn-logout" onclick="logout()">로그아웃</button>
+  </div>
+</div>
+
+<div class="main">
+  <button class="detail-back" onclick="history.back()">← 목록으로</button>
+  <div id="detail-content">
+    <div class="card" style="text-align:center;padding:60px;color:#9ca3af;">불러오는 중...</div>
+  </div>
+</div>
+
+<script>
+const EDGE_URL = 'https://cacapnccxogkwatpvvte.supabase.co/functions/v1/notion-proxy';
+
+const staff = JSON.parse(sessionStorage.getItem('staff') || 'null');
+if (!staff) location.href = 'index.html';
+document.getElementById('user-name').textContent = `${staff.name} (${staff.department || ''})`;
+
+function logout() {
+  sessionStorage.removeItem('staff');
+  location.href = 'index.html';
+}
+
+const params = new URLSearchParams(location.search);
+const pageId = params.get('id');
+const type = params.get('type');
+
+function getProp(page, key, propType = 'text') {
+  const prop = page.properties?.[key];
+  if (!prop) return null;
+  if (propType === 'title') return prop.title?.[0]?.plain_text || null;
+  if (propType === 'select') return prop.select?.name || null;
+  if (propType === 'multi_select') return prop.multi_select?.map(o => o.name).join(', ') || null;
+  if (propType === 'rich_text') return prop.rich_text?.[0]?.plain_text || null;
+  if (propType === 'date') return prop.date?.start?.slice(0, 10) || null;
+  if (propType === 'number') return prop.number != null ? String(prop.number) : null;
+  if (propType === 'phone_number') return prop.phone_number || null;
+  if (propType === 'email') return prop.email || null;
+  if (propType === 'created_time') return prop.created_time?.slice(0, 10) || null;
+  return null;
+}
+
+function val(v) {
+  return v ? `<span class="value">${v}</span>` : `<span class="value empty-val">-</span>`;
+}
+
+function statusBadge(status) {
+  const map = {
+    '신규': 'badge-blue', '상담 완료': 'badge-green', '계약 완료': 'badge-purple',
+    '이력서 전송 완료': 'badge-yellow', '채용 완료': 'badge-gray',
+    '사증 제출 완료': 'badge-orange', '사증 발급 완료': 'badge-pink',
+    '섭외 취소': 'badge-red', '영업 취소': 'badge-red', '보류': 'badge-gray', '사증 불허': 'badge-red',
+  };
+  const cls = map[status] || 'badge-gray';
+  return `<span class="badge ${cls}">${status || '-'}</span>`;
+}
+
+function renderSeobwi(page) {
+  const title = getProp(page, '업체명', 'title') || '(업체명 없음)';
+  const status = getProp(page, '상태', 'select');
+  const created = getProp(page, '생성일', 'created_time');
+
+  return `
+    <div class="detail-card">
+      <div class="detail-title">${title}</div>
+      <div class="detail-meta">
+        ${status ? statusBadge(status) : ''}
+        <span>생성일: ${created || '-'}</span>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">기본 정보</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>상태</label>${val(getProp(page, '상태', 'select'))}</div>
+          <div class="detail-field"><label>부서</label>${val(getProp(page, '부서', 'select'))}</div>
+          <div class="detail-field"><label>섭외담당자</label>${val(getProp(page, '섭외담당자', 'rich_text'))}</div>
+          <div class="detail-field"><label>TM일</label>${val(getProp(page, 'TM일', 'date'))}</div>
+          <div class="detail-field"><label>상담날짜</label>${val(getProp(page, '상담날짜', 'date'))}</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">업체 정보</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>대표자명</label>${val(getProp(page, '대표자명', 'rich_text'))}</div>
+          <div class="detail-field"><label>대표자 연락처</label>${val(getProp(page, '대표자 연락처', 'phone_number'))}</div>
+          <div class="detail-field"><label>업체 전화번호</label>${val(getProp(page, '업체 전화번호', 'phone_number'))}</div>
+          <div class="detail-field"><label>담당자명/직책</label>${val(getProp(page, '담당자명/직책', 'rich_text'))}</div>
+          <div class="detail-field"><label>통화자 연락처</label>${val(getProp(page, '통화자 연락처', 'phone_number'))}</div>
+          <div class="detail-field"><label>업종</label>${val(getProp(page, '업종', 'rich_text'))}</div>
+          <div class="detail-field"><label>직원 수</label>${val(getProp(page, '직원 수', 'rich_text'))}</div>
+          <div class="detail-field"><label>주생산품</label>${val(getProp(page, '주생산품', 'rich_text'))}</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">재무 정보</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>사업자등록번호</label>${val(getProp(page, '사업자등록번호', 'rich_text'))}</div>
+          <div class="detail-field"><label>전년도 매출</label>${val(getProp(page, '전년도 매출', 'rich_text'))}</div>
+          <div class="detail-field"><label>전년도 당기순이익</label>${val(getProp(page, '전년도 당기순이익', 'rich_text'))}</div>
+          <div class="detail-field"><label>국세/부가세</label>${val(getProp(page, '국세/부가세', 'select'))}</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">기타</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>방문장소</label>${val(getProp(page, '방문장소', 'rich_text'))}</div>
+          <div class="detail-field"><label>참고사항</label>${val(getProp(page, '참고사항', 'rich_text'))}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderContract(page) {
+  const title = getProp(page, '업체명', 'title') || '(업체명 없음)';
+  const status = getProp(page, '상태', 'select');
+  const created = getProp(page, '생성일', 'created_time');
+
+  return `
+    <div class="detail-card">
+      <div class="detail-title">${title}</div>
+      <div class="detail-meta">
+        ${status ? statusBadge(status) : ''}
+        <span>생성일: ${created || '-'}</span>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">계약 기본 정보</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>상태</label>${val(getProp(page, '상태', 'select'))}</div>
+          <div class="detail-field"><label>부서</label>${val(getProp(page, '부서', 'select'))}</div>
+          <div class="detail-field"><label>영업담당자</label>${val(getProp(page, '영업담당자', 'rich_text'))}</div>
+          <div class="detail-field"><label>상담날짜</label>${val(getProp(page, '상담날짜', 'date'))}</div>
+          <div class="detail-field"><label>고용신청인원</label>${val(getProp(page, '고용 신청인원', 'number'))}</div>
+          <div class="detail-field"><label>근로계약기간</label>${val(getProp(page, '근로계약 기간', 'rich_text'))}</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">업체 담당자</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>담당자명/직함</label>${val(getProp(page, '업체 담당자명/직함', 'rich_text'))}</div>
+          <div class="detail-field"><label>연락처</label>${val(getProp(page, '업체 담당자 연락처', 'phone_number'))}</div>
+          <div class="detail-field"><label>이메일</label>${val(getProp(page, '업체 담당자 이메일', 'email'))}</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">근로 조건</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>주사업내용</label>${val(getProp(page, '주 사업내용', 'rich_text'))}</div>
+          <div class="detail-field"><label>근로자직무내용</label>${val(getProp(page, '근로자 직무내용', 'rich_text'))}</div>
+          <div class="detail-field"><label>근로시간</label>${val(getProp(page, '근로시간', 'rich_text'))}</div>
+          <div class="detail-field"><label>초과근무시간</label>${val(getProp(page, '초과 근무시간', 'rich_text'))}</div>
+          <div class="detail-field"><label>휴게시간</label>${val(getProp(page, '휴게시간', 'rich_text'))}</div>
+          <div class="detail-field"><label>휴일</label>${val(getProp(page, '휴일', 'multi_select'))}</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">급여 및 복리후생</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>월급여및수당</label>${val(getProp(page, '월 급여 및 수당', 'rich_text'))}</div>
+          <div class="detail-field"><label>급여지급일</label>${val(getProp(page, '급여 지급일', 'rich_text'))}</div>
+          <div class="detail-field"><label>지급방식</label>${val(getProp(page, '지급 방식', 'select'))}</div>
+          <div class="detail-field"><label>숙소제공</label>${val(getProp(page, '숙소 제공', 'multi_select'))}</div>
+          <div class="detail-field"><label>숙소근로자부담금액</label>${val(getProp(page, '숙소 근로자 부담금액', 'rich_text'))}</div>
+          <div class="detail-field"><label>식사제공</label>${val(getProp(page, '식사 제공', 'multi_select'))}</div>
+          <div class="detail-field"><label>식사근로자부담금액</label>${val(getProp(page, '식사 근로자 부담금액', 'rich_text'))}</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">주소 및 기타</div>
+        <div class="detail-grid">
+          <div class="detail-field"><label>회사주소</label>${val(getProp(page, '회사 주소', 'rich_text'))}</div>
+          <div class="detail-field"><label>근무지주소</label>${val(getProp(page, '근무지 주소', 'rich_text'))}</div>
+          <div class="detail-field"><label>본사진행현황</label>${val(getProp(page, '본사 진행현황', 'rich_text'))}</div>
+          <div class="detail-field"><label>특이사항</label>${val(getProp(page, '특이사항', 'rich_text'))}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadDetail() {
+  if (!pageId || !type) {
+    document.getElementById('detail-content').innerHTML = '<div class="card" style="text-align:center;padding:60px;color:#ef4444;">잘못된 접근입니다.</div>';
+    return;
+  }
+
+  try {
+    const action = type === 'seobwi' ? 'get_seobwi_detail' : 'get_contract_detail';
+    const res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, staff_code: staff.staff_code, name: staff.name, params: { page_id: pageId } })
+    });
+    const page = await res.json();
+
+    if (page.object !== 'page') {
+      throw new Error('페이지를 찾을 수 없습니다');
+    }
+
+    document.getElementById('detail-content').innerHTML =
+      type === 'seobwi' ? renderSeobwi(page) : renderContract(page);
+
+  } catch (e) {
+    document.getElementById('detail-content').innerHTML = '<div class="card" style="text-align:center;padding:60px;color:#ef4444;">데이터를 불러올 수 없습니다.</div>';
+  }
+}
+
+loadDetail();
+</script>
+</body>
+</html>

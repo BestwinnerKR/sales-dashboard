@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>베스트위너 영업 포털 — 계약 진행</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.form-section { margin-bottom: 28px; }
+.form-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.form-grid .full { grid-column: 1 / -1; }
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s;
+}
+.form-group textarea:focus { border-color: var(--primary); }
+.form-group select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.form-group select:focus { border-color: var(--primary); }
+.company-info-box {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.company-info-box .company-name {
+  font-size: 18px;
+  font-weight: 700;
+}
+.company-info-box .company-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.btn-secondary {
+  flex: 1;
+  padding: 13px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-secondary:hover { background: var(--border); }
+.btn-primary { flex: 2; }
+@media (max-width: 600px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .form-grid .full { grid-column: 1; }
+}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="brand">베스트위너 영업 포털</div>
+  <div class="user-info">
+    <span id="user-name"></span>
+    <button class="btn-logout" onclick="logout()">로그아웃</button>
+  </div>
+</div>
+
+<div class="main">
+  <button class="detail-back" onclick="history.back()">← 섭외 목록으로</button>
+
+  <div id="page-content">
+    <div class="card" style="text-align:center;padding:60px;color:#9ca3af;">불러오는 중...</div>
+  </div>
+</div>
+
+<script>
+const EDGE_URL = 'https://cacapnccxogkwatpvvte.supabase.co/functions/v1/notion-proxy';
+
+const staff = JSON.parse(sessionStorage.getItem('staff') || 'null');
+if (!staff) location.href = 'index.html';
+document.getElementById('user-name').textContent = `${staff.name} (${staff.department || ''})`;
+
+function logout() {
+  sessionStorage.removeItem('staff');
+  location.href = 'index.html';
+}
+
+const params = new URLSearchParams(location.search);
+const seobwiId = params.get('seobwi_id');
+const companyName = decodeURIComponent(params.get('company') || '');
+const seobwiStatus = decodeURIComponent(params.get('status') || '');
+
+if (!seobwiId) location.href = 'dashboard.html';
+
+// 페이지 렌더링
+document.getElementById('page-content').innerHTML = `
+  <div class="company-info-box">
+    <div>
+      <div class="company-name">${companyName}</div>
+      <div class="company-meta">섭외 건 계약 진행</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="form-section">
+      <div class="form-section-title">계약 기본 정보</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>상담날짜</label>
+          <input type="date" id="f-consult-date">
+        </div>
+        <div class="form-group">
+          <label>고용신청인원</label>
+          <input type="number" id="f-hire-count" placeholder="명">
+        </div>
+        <div class="form-group">
+          <label>근로계약기간</label>
+          <input type="text" id="f-contract-period" placeholder="예: 2026.01.01 ~ 2026.12.31">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">업체 담당자</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>담당자명/직함</label>
+          <input type="text" id="f-manager-name" placeholder="홍길동 / 부장">
+        </div>
+        <div class="form-group">
+          <label>연락처</label>
+          <input type="tel" id="f-manager-phone" placeholder="010-0000-0000">
+        </div>
+        <div class="form-group">
+          <label>이메일</label>
+          <input type="email" id="f-manager-email" placeholder="example@company.com">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">사업 및 직무 내용</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>주사업내용</label>
+          <textarea id="f-main-business" placeholder="업체의 주요 사업 내용"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>근로자직무내용</label>
+          <textarea id="f-job-content" placeholder="외국인 근로자가 수행할 직무 내용"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">근로 조건</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>근로시간</label>
+          <input type="text" id="f-work-hours" placeholder="예: 09:00~18:00">
+        </div>
+        <div class="form-group">
+          <label>월급여및수당</label>
+          <input type="text" id="f-salary" placeholder="예: 2,300,000원">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">주소</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>회사주소</label>
+          <input type="text" id="f-company-address" placeholder="회사 주소">
+        </div>
+        <div class="form-group full">
+          <label>근무지주소</label>
+          <input type="text" id="f-work-address" placeholder="실제 근무지 주소 (회사와 다를 경우)">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">기타</div>
+      <div class="form-group">
+        <label>특이사항</label>
+        <textarea id="f-notes" placeholder="특이사항이 있으면 입력해주세요"></textarea>
+      </div>
+    </div>
+
+    <div id="submit-error" style="color:var(--red);font-size:13px;margin-bottom:12px;display:none;"></div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="history.back()">취소</button>
+      <button class="btn-primary" id="submit-btn" onclick="submitContract()">계약 진행 완료</button>
+    </div>
+  </div>
+`;
+
+async function submitContract() {
+  const btn = document.getElementById('submit-btn');
+  const errEl = document.getElementById('submit-error');
+  errEl.style.display = 'none';
+
+  btn.disabled = true;
+  btn.textContent = '처리 중...';
+
+  try {
+    const res = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create_contract',
+        staff_code: staff.staff_code,
+        name: staff.name,
+        params: {
+          seobwi_page_id: seobwiId,
+          fields: {
+            company_name: companyName,
+            consult_date: document.getElementById('f-consult-date').value || null,
+            hire_count: document.getElementById('f-hire-count').value || null,
+            contract_period: document.getElementById('f-contract-period').value || null,
+            manager_name: document.getElementById('f-manager-name').value || null,
+            manager_phone: document.getElementById('f-manager-phone').value || null,
+            manager_email: document.getElementById('f-manager-email').value || null,
+            main_business: document.getElementById('f-main-business').value || null,
+            job_content: document.getElementById('f-job-content').value || null,
+            work_hours: document.getElementById('f-work-hours').value || null,
+            salary: document.getElementById('f-salary').value || null,
+            company_address: document.getElementById('f-company-address').value || null,
+            work_address: document.getElementById('f-work-address').value || null,
+            notes: document.getElementById('f-notes').value || null,
+          }
+        }
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      location.href = 'dashboard.html?tab=contract&success=1';
+    } else {
+      errEl.textContent = data.error || '오류가 발생했습니다. 다시 시도해주세요.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '계약 진행 완료';
+    }
+  } catch (e) {
+    errEl.textContent = '서버 오류가 발생했습니다. 다시 시도해주세요.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '계약 진행 완료';
+  }
+}
+</script>
+</body>
+</html>
